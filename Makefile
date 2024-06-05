@@ -1,5 +1,2 @@
-
-MAINS = cmd/track
-
 run:
-	go run $(MAINS)/main.go
+	go run main.go
