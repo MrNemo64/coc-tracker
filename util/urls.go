@@ -7,14 +7,15 @@ const (
 	KeyCreateEndpoint = "/api/apikey/create"
 	KeyRevokeEndpoint = "/api/apikey/revoke"
 
-	BaseUrl           = "https://api.clashofclans.com/v1"
-	ClanEndpoint      = "/clans"
-	PlayerEndpoint    = "/players"
-	LeagueEndpoint    = "/leagues"
-	WarLeagueEndpoint = "/warleagues"
-	LocationEndpoint  = "/locations"
-	GoldpassEndpoint  = "/goldpass/seasons/current"
-	LabelEndpoint     = "/labels"
+	BaseUrl               = "https://api.clashofclans.com/v1"
+	ClanEndpoint          = "/clans"
+	PlayerEndpoint        = "/players"
+	PlayerLeagueEndpoint  = "/leagues"
+	CapitalLeagueEndpoint = "/capitalleagues"
+	WarLeagueEndpoint     = "/warleagues"
+	LocationEndpoint      = "/locations"
+	GoldpassEndpoint      = "/goldpass/seasons/current"
+	LabelEndpoint         = "/labels"
 
 	IPUrl = "https://api.ipify.org"
 )

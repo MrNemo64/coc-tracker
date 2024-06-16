@@ -1,0 +1,14 @@
+BEGIN;
+
+CREATE TYPE job_state AS ENUM ('pending', 'queued', 'running');
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR NOT NULL,
+    data JSONB NOT NULL DEFAULT '{}',
+    state job_state NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    available_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMIT;
