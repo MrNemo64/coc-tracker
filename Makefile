@@ -7,6 +7,9 @@ DOCKER_NETWORK = host
 run:
 	go run main.go
 
+test:
+	go test ./track/...
+
 migration:
 	migrate create -ext sql -dir $(MIGRATIONS_DIR) -seq $(MIGRATION_NAME)
 

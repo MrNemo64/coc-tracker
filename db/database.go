@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/MrNemo64/coc-tracker/util"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -42,13 +43,26 @@ func ConnectToDatabase(conf DatabaseConfiguration) (*sqlx.DB, error) {
 }
 
 func Migrate(db *sqlx.DB) error {
+	migrations, err := util.FindFileInRoot(os.Getenv("MIGRATIONS_DIR"))
+	fmt.Printf("+++MIGRATIONS: %v\nENV: %v", migrations, os.Getenv("MIGRATIONS_DIR"))
+	if err != nil {
+		return err
+	}
+
 	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
 	if err != nil {
 		return err
 	}
-	migration, err := migrate.NewWithDatabaseInstance("file://"+os.Getenv("MIGRATIONS_DIR"), "postgres", driver)
+
+	migration, err := migrate.NewWithDatabaseInstance("file://"+migrations, "postgres", driver)
 	if err != nil {
 		return err
 	}
-	return migration.Up()
+
+	err = migration.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return err
+	}
+
+	return nil
 }
