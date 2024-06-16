@@ -44,7 +44,6 @@ func ConnectToDatabase(conf DatabaseConfiguration) (*sqlx.DB, error) {
 
 func Migrate(db *sqlx.DB) error {
 	migrations, err := util.FindFileInRoot(os.Getenv("MIGRATIONS_DIR"))
-	fmt.Printf("+++MIGRATIONS: %v\nENV: %v", migrations, os.Getenv("MIGRATIONS_DIR"))
 	if err != nil {
 		return err
 	}
