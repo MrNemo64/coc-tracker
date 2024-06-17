@@ -118,7 +118,9 @@ func (q *RegisteredJobs) FetchAvailableJobs(jctx JobRunContext, logger *slog.Log
 		WITH selected_jobs AS (
 			SELECT id
 			FROM jobs
-			WHERE state = 'pending'
+			WHERE
+				state = 'pending'
+				AND available_at <= CURRENT_TIMESTAMP
 			ORDER BY available_at ASC
 		)
 		UPDATE jobs
