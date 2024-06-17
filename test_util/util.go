@@ -3,10 +3,13 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/MrNemo64/coc-tracker/db"
+	"github.com/MrNemo64/coc-tracker/track/jobs"
 	"github.com/jmoiron/sqlx"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -82,4 +85,25 @@ func CreatePostgresContainer() (*TestDatabase, error) {
 	}
 
 	return testContainer, nil
+}
+
+func (tdb *TestDatabase) AssertJobsTableEquals(t *testing.T, expected []jobs.DBJob) {
+	rows, err := tdb.DB.Queryx("SELECT * FROM jobs ORDER BY id ASC")
+	if err != nil {
+		t.Errorf("Failed to query table jobs: %v", err)
+	}
+	defer rows.Close()
+
+	var results []jobs.DBJob
+	for rows.Next() {
+		var row jobs.DBJob
+		if err := rows.StructScan(&row); err != nil {
+			t.Errorf("Failed to scan row: %v", err)
+		}
+		results = append(results, row)
+	}
+
+	if !reflect.DeepEqual(results, expected) {
+		t.Errorf("Table jobs does not match expected rows.\nExpected: %#v\nGot: %#v", expected, results)
+	}
 }

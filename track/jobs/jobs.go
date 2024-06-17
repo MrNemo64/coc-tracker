@@ -14,9 +14,9 @@ import (
 type JobState string
 
 var (
-	JobStatePending = "pending"
-	JobStateQueued  = "queued"
-	JobStateRunning = "running"
+	JobStatePending JobState = "pending"
+	JobStateQueued  JobState = "queued"
+	JobStateRunning JobState = "running"
 )
 
 type JobRunContext interface {
@@ -102,32 +102,16 @@ func (q *RegisteredJobs) RunJobLoop(jctx JobRunContext, logger *slog.Logger, ctx
 
 }
 
-func (q *RegisteredJobs) fetchAvailableJobs(jctx JobRunContext, logger *slog.Logger, ctx context.Context, consumers chan availableJob) {
+func (q *RegisteredJobs) FetchAvailableJobs(jctx JobRunContext, logger *slog.Logger, ctx context.Context, consumers chan DBJob) error {
 	for {
 		time.Sleep(time.Second * 1)
 		select {
 		case <-ctx.Done():
-			var ids []int64
-			for job := range consumers {
-				ids = append(ids, job.id)
-			}
+			ids := collectJobsFromChannel(consumers)
 			if len(ids) == 0 {
-				return
+				return nil
 			}
-			db := jctx.GetDB()
-			query, args, err := sqlx.In("UPDATE jobs SET state = 'pending' WHERE id IN (?)", ids)
-			if err != nil {
-				logger.Error("Error preparing update query to revert jobs to pending", "err", err, "jobs", ids)
-				return
-			}
-			query = db.Rebind(query)
-			_, err = db.ExecContext(ctx, query, args...)
-			if err != nil {
-				logger.Error("Error updating job states to pending", "err", err, "jobs", ids)
-			} else {
-				logger.Info("Reverted jobs from queued to pending", "jobs", ids)
-			}
-			return
+			return setJobsToPending(ids, logger, jctx.GetDB())
 		default:
 		}
 		rows, err := jctx.GetDB().QueryxContext(ctx, `
@@ -148,25 +132,73 @@ func (q *RegisteredJobs) fetchAvailableJobs(jctx JobRunContext, logger *slog.Log
 			continue
 		}
 
+		var jobs []DBJob
+
 		for rows.Next() {
-			var job availableJob
+			var job DBJob
 			if err = rows.StructScan(&job); err != nil {
 				logger.Error("Error scanning row", "err", err)
 				continue
 			}
-			logger.Info("Queued job", "job-id", job.id)
-			consumers <- job
+			jobs = append(jobs, job)
 		}
 
-		rows.Close()
+		if err := rows.Close(); err != nil {
+			logger.Error("Error closing rows", "err", err)
+		}
+
+		for i := 0; i < len(jobs); i++ {
+			job := jobs[i]
+			select {
+			case consumers <- job:
+				logger.Info("Queued job", "job-id", job.Id)
+			case <-ctx.Done():
+				ids := collectJobsFromChannel(consumers)
+				for ; i < len(jobs); i++ {
+					ids = append(ids, jobs[i].Id)
+				}
+				if len(ids) == 0 {
+					return nil
+				}
+				return setJobsToPending(ids, logger, jctx.GetDB())
+			}
+		}
 	}
 }
 
-type availableJob struct {
-	id          int64     `db:"id"`
-	name        string    `db:"name"`
-	data        string    `db:"data"`
-	state       JobState  `db:"job_state"`
-	createdAt   time.Time `db:"created_at"`
-	availableAt time.Time `db:"available_at"`
+func collectJobsFromChannel(channel chan DBJob) []int64 {
+	var ids []int64
+	for {
+		select {
+		case job := <-channel:
+			ids = append(ids, job.Id)
+		default:
+			return ids
+		}
+	}
+}
+
+func setJobsToPending(ids []int64, logger *slog.Logger, db *sqlx.DB) error {
+	query, args, err := sqlx.In("UPDATE jobs SET state = 'pending' WHERE id IN (?)", ids)
+	if err != nil {
+		logger.Error("Error preparing update query to revert jobs to pending", "err", err, "jobs", ids)
+		return err
+	}
+	query = db.Rebind(query)
+	_, err = db.Exec(query, args...)
+	if err != nil {
+		logger.Error("Error updating job states to pending", "err", err, "jobs", ids)
+		return err
+	}
+	logger.Info("Reverted jobs from queued to pending", "jobs", ids)
+	return nil
+}
+
+type DBJob struct {
+	Id          int64     `db:"id"`
+	Name        string    `db:"name"`
+	Data        string    `db:"data"`
+	State       JobState  `db:"state"`
+	CreatedAt   time.Time `db:"created_at"`
+	AvailableAt time.Time `db:"available_at"`
 }
