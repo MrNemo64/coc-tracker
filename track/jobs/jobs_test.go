@@ -12,6 +12,7 @@ import (
 	"github.com/MrNemo64/coc-tracker/track/jobs"
 	"github.com/MrNemo64/coc-tracker/util"
 	"github.com/jmoiron/sqlx"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -151,6 +152,72 @@ func TestFetchAvailableJobs(t *testing.T) {
 		}
 
 		mockJobs[0].State = jobs.JobStateRunning
+		container.AssertJobsTableEquals(t, mockJobs)
+	})
+
+	t.Run("Consume all four available jobs in order", func(t *testing.T) {
+		container, providers, logger, jobChannel, jctx, ctx, cancel, mockJobs := prepareForTestCase(2)
+		t.Cleanup(func() {
+			if err := container.Shutdown(); err != nil {
+				t.Errorf("Error shuting down test container: %v", err)
+			}
+			cancel()
+			close(jobChannel)
+		})
+
+		errChanel := make(chan error, 1)
+		go func() {
+			errChanel <- providers.FetchAvailableJobs(jctx, logger.Logger, ctx, jobChannel)
+		}()
+
+		expectedOrder := []int64{1, 3, 4, 2}
+		for i := 0; i < 4; i++ {
+			select {
+			case job := <-jobChannel:
+				if _, err := container.DB.Exec(`UPDATE jobs SET state = $1 WHERE id = $2`, jobs.JobStateRunning, job.Id); err != nil {
+					t.Errorf("Could not update state of extracted job: %v", err)
+				}
+				assert.Equal(t, expectedOrder[i], job.Id, "Did not get expected job")
+			case <-time.After(3 * time.Second):
+				t.Errorf("Timed out waiting for Job %d to appear in channel", i)
+			}
+		}
+
+		select {
+		case job := <-jobChannel:
+			t.Errorf("Found job %v in channel when it should have been empty", job)
+		default:
+		}
+
+		cancel()
+		select {
+		case resultErr := <-errChanel:
+			if resultErr != nil {
+				t.Errorf("FetchAvailableJobs failed to cancel: %v", resultErr)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("Timed out waiting for FetchAvailableJobs to cancel")
+		}
+
+		var foundJobs []jobs.DBJob
+	channelCollectFor:
+		for {
+			select {
+			case found := <-jobChannel:
+				foundJobs = append(foundJobs, found)
+			default:
+				break channelCollectFor
+			}
+		}
+
+		if len(foundJobs) > 0 {
+			t.Errorf("Jobs channel is not empty after cancelation, found %v", foundJobs)
+		}
+
+		mockJobs[0].State = jobs.JobStateRunning
+		mockJobs[2].State = jobs.JobStateRunning
+		mockJobs[3].State = jobs.JobStateRunning
+		mockJobs[1].State = jobs.JobStateRunning
 		container.AssertJobsTableEquals(t, mockJobs)
 	})
 }
