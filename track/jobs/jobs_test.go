@@ -30,12 +30,13 @@ func (m *mockJobRunContext) Get(context.Context, string) (*http.Response, bool, 
 }
 
 func TestFetchAvailableJobs(t *testing.T) {
+	t.Parallel()
 
 	var prepareForTestCase = func(channelSize int) (container *testutil.TestDatabase, providers *jobs.RegisteredJobs, logger *testutil.TestLogBuffer, jobChannel chan jobs.DBJob, jctx *mockJobRunContext, ctx context.Context, cancel context.CancelFunc, mockjobs []jobs.DBJob) {
 
 		container, err := testutil.CreatePostgresContainer()
 		if err != nil {
-			t.Errorf("Could not set up test database: %v", err)
+			t.Fatalf("Could not set up test database: %v", err)
 		}
 
 		mockjobs = []jobs.DBJob{
@@ -88,7 +89,7 @@ func TestFetchAvailableJobs(t *testing.T) {
 				`INSERT INTO jobs(id, name, data, state, created_at, available_at)
 				VALUES (:id, :name, :data, :state, :created_at, :available_at)`,
 				job); err != nil {
-				t.Errorf("Error inserting job %v: %v", job, err)
+				t.Fatalf("Error inserting job %v: %v", job, err)
 			}
 		}
 
@@ -103,10 +104,11 @@ func TestFetchAvailableJobs(t *testing.T) {
 	}
 
 	t.Run("Channel is emptied when cancelled while blocked after taking out one job", func(t *testing.T) {
+		t.Parallel()
 		container, providers, logger, jobChannel, jctx, ctx, cancel, mockJobs := prepareForTestCase(2)
 		t.Cleanup(func() {
 			if err := container.Shutdown(); err != nil {
-				t.Errorf("Error shuting down test container: %v", err)
+				t.Fatalf("Error shuting down test container: %v", err)
 			}
 			cancel()
 			close(jobChannel)
@@ -156,6 +158,7 @@ func TestFetchAvailableJobs(t *testing.T) {
 	})
 
 	t.Run("Consume all four available jobs in order", func(t *testing.T) {
+		t.Parallel()
 		container, providers, logger, jobChannel, jctx, ctx, cancel, mockJobs := prepareForTestCase(2)
 		t.Cleanup(func() {
 			if err := container.Shutdown(); err != nil {

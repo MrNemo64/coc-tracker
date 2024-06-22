@@ -15,7 +15,8 @@ func (buff *TestLogBuffer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (buff *TestLogBuffer) AssertLogIsEqual(t *testing.T, expected []string) {
+func (buff *TestLogBuffer) AssertLogIsEqual(t testing.TB, expected []string) {
+	t.Helper()
 	if len(expected) != len(buff.lines) {
 		t.Errorf("Invalid number of lines, expected %d but had %d", len(expected), len(buff.lines))
 	}
